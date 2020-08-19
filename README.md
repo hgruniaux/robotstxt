@@ -1,8 +1,14 @@
 
-# Google Robots.txt Parser and Matcher Library
+# Google-based Robots.txt Parser and Matcher Library
 
 The repository contains Google's robots.txt parser and matcher as a C++ library
 (compliant to C++17).
+
+## About the fork
+
+This fork, from the original Google Robots.txt parser, removes the abseil dependency 
+and now depends on C++17. It also adds **very** small improvements to the original code
+(e.g. native support for `Crawl-Delay` directive).
 
 ## About the library
 
