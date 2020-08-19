@@ -57,6 +57,7 @@ class RobotsParseHandler {
   virtual void HandleUserAgent(int line_num, std::string_view value) = 0;
   virtual void HandleAllow(int line_num, std::string_view value) = 0;
   virtual void HandleDisallow(int line_num, std::string_view value) = 0;
+  virtual void HandleCrawlDelay(int line_num, std::string_view value) = 0;
 
   virtual void HandleSitemap(int line_num, std::string_view value) = 0;
 
@@ -148,6 +149,7 @@ class RobotsMatcher : protected RobotsParseHandler {
   void HandleUserAgent(int line_num, std::string_view value) override;
   void HandleAllow(int line_num, std::string_view value) override;
   void HandleDisallow(int line_num, std::string_view value) override;
+  void HandleCrawlDelay(int line_num, std::string_view value) override;
 
   void HandleSitemap(int line_num, std::string_view value) override;
   void HandleUnknownAction(int line_num, std::string_view action,

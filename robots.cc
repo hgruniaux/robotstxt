@@ -248,6 +248,7 @@ class ParsedRobotsKey {
     // Fields within a user-agent.
     ALLOW,
     DISALLOW,
+    CRAWL_DELAY,
 
     // Unrecognized field; kept as-is. High number so that additions to the
     // enumeration above does not change the serialization.
@@ -275,6 +276,7 @@ class ParsedRobotsKey {
   static bool KeyIsAllow(std::string_view key);
   static bool KeyIsDisallow(std::string_view key);
   static bool KeyIsSitemap(std::string_view key);
+  static bool KeyIsCrawlDelay(std::string_view key);
 
   KeyType type_;
   std::string_view key_text_;
@@ -289,6 +291,7 @@ void EmitKeyValueToHandler(int line, const ParsedRobotsKey& key,
     case Key::ALLOW:          handler->HandleAllow(line, value); break;
     case Key::DISALLOW:       handler->HandleDisallow(line, value); break;
     case Key::SITEMAP:        handler->HandleSitemap(line, value); break;
+    case Key::CRAWL_DELAY:    handler->HandleCrawlDelay(line, value); break;
     case Key::UNKNOWN:
       handler->HandleUnknownAction(line, key.GetUnknownText(), value);
       break;
@@ -695,6 +698,10 @@ int LongestMatchRobotsMatchStrategy::MatchDisallow(std::string_view path,
   return Matches(path, pattern) ? pattern.length() : -1;
 }
 
+void RobotsMatcher::HandleCrawlDelay(int line_num, std::string_view value) {
+  seen_separator_ = true;
+}
+
 void RobotsMatcher::HandleSitemap(int line_num, std::string_view value) {
   seen_separator_ = true;
 }
@@ -714,6 +721,8 @@ void ParsedRobotsKey::Parse(std::string_view key) {
     type_ = DISALLOW;
   } else if (KeyIsSitemap(key)) {
     type_ = SITEMAP;
+  }  else if (KeyIsSitemap(key)) {
+    type_ = CRAWL_DELAY;
   } else {
     type_ = UNKNOWN;
     key_text_ = key;
@@ -749,6 +758,13 @@ bool ParsedRobotsKey::KeyIsDisallow(std::string_view key) {
 bool ParsedRobotsKey::KeyIsSitemap(std::string_view key) {
   return ((boost::istarts_with(key, "sitemap")) ||
           (boost::istarts_with(key, "site-map")));
+}
+
+bool ParsedRobotsKey::KeyIsCrawlDelay(std::string_view key) {
+  return (
+    boost::istarts_with(key, "crawl-delay") ||
+    (kAllowFrequentTypos && ((boost::istarts_with(key, "crawldelay")) ||
+                             (boost::istarts_with(key, "crawl delay")))));
 }
 
 }  // namespace googlebot
