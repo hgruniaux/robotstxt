@@ -353,7 +353,7 @@ static inline void Trim(std::string_view& view)
 // Removes leading and trailing whitespace from null-terminated string s.
 /* static */ void RobotsTxtParser::StripWhitespaceSlowly(char ** s) {
   std::string_view str(*s);
-  TrimRight(str);
+  Trim(str);
   *s = const_cast<char*>(str.data());
   (*s)[str.size()] = '\0';
 }
