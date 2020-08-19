@@ -53,7 +53,7 @@ namespace googlebot {
 //    Match.
 class RobotsMatchStrategy {
  public:
-  virtual ~RobotsMatchStrategy() {}
+  virtual ~RobotsMatchStrategy() = default;
 
   virtual int MatchAllow(std::string_view path,
                          std::string_view pattern) = 0;
@@ -164,6 +164,10 @@ static inline bool AsciiIsSpace(char ch) noexcept
 static inline bool AsciiIsXDigit(char ch) noexcept
 {
   return static_cast<bool>(std::isxdigit(static_cast<unsigned char>(ch)));
+}
+static inline char AsciiToLower(char ch) noexcept
+{
+  return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
 }
 static inline char AsciiToUpper(char ch) noexcept
 {
@@ -388,7 +392,7 @@ bool RobotsTxtParser::GetKeyAndValueFrom(char ** key, char ** value,
   *sep = '\0';                        // And stops at the separator.
   StripWhitespaceSlowly(key);         // Get rid of any trailing whitespace.
 
-  if (strlen(*key) > 0) {
+  if (*key[0] != '\0') {
     *value = 1 + sep;                 // Value starts after the separator.
     StripWhitespaceSlowly(value);     // Get rid of any leading whitespace.
     return true;
@@ -475,7 +479,7 @@ void RobotsTxtParser::Parse() {
 // characters matched by a pattern is returned as its match priority.
 class LongestMatchRobotsMatchStrategy : public RobotsMatchStrategy {
  public:
-  LongestMatchRobotsMatchStrategy() { }
+  LongestMatchRobotsMatchStrategy() = default;
 
   // Disallow copying and assignment.
   LongestMatchRobotsMatchStrategy(const LongestMatchRobotsMatchStrategy&) =
