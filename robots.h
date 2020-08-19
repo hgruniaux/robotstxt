@@ -1,4 +1,5 @@
 // Copyright 1999 Google LLC
+// Copyright 2020 Hubert Gruniaux
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,8 +37,7 @@
 
 #include <string>
 #include <vector>
-
-#include "absl/strings/string_view.h"
+#include <string_view>
 
 namespace googlebot {
 // Handler for directives found in robots.txt. These callbacks are called by
@@ -54,15 +54,15 @@ class RobotsParseHandler {
   virtual void HandleRobotsStart() = 0;
   virtual void HandleRobotsEnd() = 0;
 
-  virtual void HandleUserAgent(int line_num, absl::string_view value) = 0;
-  virtual void HandleAllow(int line_num, absl::string_view value) = 0;
-  virtual void HandleDisallow(int line_num, absl::string_view value) = 0;
+  virtual void HandleUserAgent(int line_num, std::string_view value) = 0;
+  virtual void HandleAllow(int line_num, std::string_view value) = 0;
+  virtual void HandleDisallow(int line_num, std::string_view value) = 0;
 
-  virtual void HandleSitemap(int line_num, absl::string_view value) = 0;
+  virtual void HandleSitemap(int line_num, std::string_view value) = 0;
 
   // Any other unrecognized name/value pairs.
-  virtual void HandleUnknownAction(int line_num, absl::string_view action,
-                                   absl::string_view value) = 0;
+  virtual void HandleUnknownAction(int line_num, std::string_view action,
+                                   std::string_view value) = 0;
 };
 
 // Parses body of a robots.txt and emits parse callbacks. This will accept
@@ -70,7 +70,7 @@ class RobotsParseHandler {
 //
 // Note, this function will accept all kind of input but will skip
 // everything that does not look like a robots directive.
-void ParseRobotsTxt(absl::string_view robots_body,
+void ParseRobotsTxt(std::string_view robots_body,
                     RobotsParseHandler* parse_callback);
 
 // RobotsMatcher - matches robots.txt against URLs.
@@ -109,17 +109,17 @@ class RobotsMatcher : protected RobotsParseHandler {
   // Verifies that the given user agent is valid to be matched against
   // robots.txt. Valid user agent strings only contain the characters
   // [a-zA-Z_-].
-  static bool IsValidUserAgentToObey(absl::string_view user_agent);
+  static bool IsValidUserAgentToObey(std::string_view user_agent);
 
   // Returns true iff 'url' is allowed to be fetched by any member of the
   // "user_agents" vector. 'url' must be %-encoded according to RFC3986.
-  bool AllowedByRobots(absl::string_view robots_body,
+  bool AllowedByRobots(std::string_view robots_body,
                        const std::vector<std::string>* user_agents,
                        const std::string& url);
 
   // Do robots check for 'url' when there is only one user agent. 'url' must
   // be %-encoded according to RFC3986.
-  bool OneAgentAllowedByRobots(absl::string_view robots_txt,
+  bool OneAgentAllowedByRobots(std::string_view robots_txt,
                                const std::string& user_agent,
                                const std::string& url);
 
@@ -145,19 +145,19 @@ class RobotsMatcher : protected RobotsParseHandler {
   void HandleRobotsStart() override;
   void HandleRobotsEnd() override {}
 
-  void HandleUserAgent(int line_num, absl::string_view value) override;
-  void HandleAllow(int line_num, absl::string_view value) override;
-  void HandleDisallow(int line_num, absl::string_view value) override;
+  void HandleUserAgent(int line_num, std::string_view value) override;
+  void HandleAllow(int line_num, std::string_view value) override;
+  void HandleDisallow(int line_num, std::string_view value) override;
 
-  void HandleSitemap(int line_num, absl::string_view value) override;
-  void HandleUnknownAction(int line_num, absl::string_view action,
-                           absl::string_view value) override;
+  void HandleSitemap(int line_num, std::string_view value) override;
+  void HandleUnknownAction(int line_num, std::string_view action,
+                           std::string_view value) override;
 
  protected:
   // Extract the matchable part of a user agent string, essentially stopping at
   // the first invalid character.
   // Example: 'Googlebot/2.1' becomes 'Googlebot'
-  static absl::string_view ExtractUserAgent(absl::string_view user_agent);
+  static std::string_view ExtractUserAgent(std::string_view user_agent);
 
   // Initialize next path and user-agents to check. Path must contain only the
   // path, params, and query (if any) of the url and must start with a '/'.

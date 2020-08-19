@@ -1,4 +1,5 @@
 // Copyright 1999 Google LLC
+// Copyright 2020 Hubert Gruniaux
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,17 +24,15 @@
 
 #include "robots.h"
 
-#include <stdlib.h>
-
+#include <cstdlib>
 #include <cstddef>
 #include <vector>
+#include <string_view>
 
-#include "absl/base/macros.h"
 #include "absl/container/fixed_array.h"
-#include "absl/strings/ascii.h"
-#include "absl/strings/match.h"
-#include "absl/strings/numbers.h"
-#include "absl/strings/string_view.h"
+
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/trim.hpp>
 
 // Allow for typos such as DISALOW in robots.txt.
 static bool kAllowFrequentTypos = true;
@@ -56,14 +55,14 @@ class RobotsMatchStrategy {
  public:
   virtual ~RobotsMatchStrategy() {}
 
-  virtual int MatchAllow(absl::string_view path,
-                         absl::string_view pattern) = 0;
-  virtual int MatchDisallow(absl::string_view path,
-                            absl::string_view pattern) = 0;
+  virtual int MatchAllow(std::string_view path,
+                         std::string_view pattern) = 0;
+  virtual int MatchDisallow(std::string_view path,
+                            std::string_view pattern) = 0;
 
  protected:
   // Implements robots.txt pattern matching.
-  static bool Matches(absl::string_view path, absl::string_view pattern);
+  static bool Matches(std::string_view path, std::string_view pattern);
 };
 
 // Returns true if URI path matches the specified pattern. Pattern is anchored
@@ -72,7 +71,7 @@ class RobotsMatchStrategy {
 // Since 'path' and 'pattern' are both externally determined (by the webmaster),
 // we make sure to have acceptable worst-case performance.
 /* static */ bool RobotsMatchStrategy::Matches(
-    absl::string_view path, absl::string_view pattern) {
+    std::string_view path, std::string_view pattern) {
   const size_t pathlen = path.length();
   absl::FixedArray<size_t> pos(pathlen + 1);
   int numpos;
@@ -153,6 +152,24 @@ std::string GetPathParamsQuery(const std::string& url) {
   return "/";
 }
 
+// ASCII character classification functions
+static inline bool AsciiIsAlpha(char ch) noexcept
+{
+  return static_cast<bool>(std::isalpha(static_cast<unsigned char>(ch)));
+}
+static inline bool AsciiIsSpace(char ch) noexcept
+{
+  return static_cast<bool>(std::isspace(static_cast<unsigned char>(ch)));
+}
+static inline bool AsciiIsXDigit(char ch) noexcept
+{
+  return static_cast<bool>(std::isxdigit(static_cast<unsigned char>(ch)));
+}
+static inline char AsciiToUpper(char ch) noexcept
+{
+  return static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+}
+
 // MaybeEscapePattern is not in anonymous namespace to allow testing.
 //
 // Canonicalize the allowed/disallowed paths. For example:
@@ -169,8 +186,8 @@ bool MaybeEscapePattern(const char* src, char** dst) {
   for (int i = 0; src[i] != 0; i++) {
     // (a) % escape sequence.
     if (src[i] == '%' &&
-        absl::ascii_isxdigit(src[i+1]) && absl::ascii_isxdigit(src[i+2])) {
-      if (absl::ascii_islower(src[i+1]) || absl::ascii_islower(src[i+2])) {
+        AsciiIsXDigit(src[i+1]) && AsciiIsXDigit(src[i+2])) {
+      if (AsciiToLower(src[i+1]) || AsciiToLower(src[i+2])) {
         need_capitalize = true;
       }
       i += 2;
@@ -190,10 +207,10 @@ bool MaybeEscapePattern(const char* src, char** dst) {
   for (int i = 0; src[i] != 0; i++) {
     // (a) Normalize %-escaped sequence (eg. %2f -> %2F).
     if (src[i] == '%' &&
-        absl::ascii_isxdigit(src[i+1]) && absl::ascii_isxdigit(src[i+2])) {
+        AsciiIsXDigit(src[i+1]) && AsciiIsXDigit(src[i+2])) {
       (*dst)[j++] = src[i++];
-      (*dst)[j++] = absl::ascii_toupper(src[i++]);
-      (*dst)[j++] = absl::ascii_toupper(src[i]);
+      (*dst)[j++] = AsciiToUpper(src[i++]);
+      (*dst)[j++] = AsciiToUpper(src[i]);
       // (b) %-escape octets whose highest bit is set. These are outside the
       // ASCII range.
     } else if (src[i] & 0x80) {
@@ -241,26 +258,26 @@ class ParsedRobotsKey {
 
   // Parse given key text. Does not copy the text, so the text_key must stay
   // valid for the object's life-time or the next Parse() call.
-  void Parse(absl::string_view key);
+  void Parse(std::string_view key);
 
   // Returns the type of key.
   KeyType type() const { return type_; }
 
   // If this is an unknown key, get the text.
-  absl::string_view GetUnknownText() const;
+  std::string_view GetUnknownText() const;
 
  private:
-  static bool KeyIsUserAgent(absl::string_view key);
-  static bool KeyIsAllow(absl::string_view key);
-  static bool KeyIsDisallow(absl::string_view key);
-  static bool KeyIsSitemap(absl::string_view key);
+  static bool KeyIsUserAgent(std::string_view key);
+  static bool KeyIsAllow(std::string_view key);
+  static bool KeyIsDisallow(std::string_view key);
+  static bool KeyIsSitemap(std::string_view key);
 
   KeyType type_;
-  absl::string_view key_text_;
+  std::string_view key_text_;
 };
 
 void EmitKeyValueToHandler(int line, const ParsedRobotsKey& key,
-                           absl::string_view value,
+                           std::string_view value,
                            RobotsParseHandler* handler) {
   typedef ParsedRobotsKey Key;
   switch (key.type()) {
@@ -279,7 +296,7 @@ class RobotsTxtParser {
  public:
   typedef ParsedRobotsKey Key;
 
-  RobotsTxtParser(absl::string_view robots_body,
+  RobotsTxtParser(std::string_view robots_body,
                   RobotsParseHandler* handler)
       : robots_body_(robots_body), handler_(handler) {
   }
@@ -293,7 +310,7 @@ class RobotsTxtParser {
   void ParseAndEmitLine(int current_line, char* line);
   bool NeedEscapeValueForKey(const Key& key);
 
-  absl::string_view robots_body_;
+  std::string_view robots_body_;
   RobotsParseHandler* const handler_;
 };
 
@@ -307,11 +324,31 @@ bool RobotsTxtParser::NeedEscapeValueForKey(const Key& key) {
   }
 }
 
+// String trim whitespace utility functions. boost::trim was unusable because
+// it takes as argument a mutable sequence container (e.g. a std::string) and
+// not std::string_view.
+static void TrimRight(std::string_view& view)
+{
+  auto it = std::find_if_not(view.rbegin(), view.rend(), AsciiIsSpace);
+  view = view.substr(0, view.rend() - it);
+}
+static void TrimLeft(std::string_view& view)
+{
+  auto it = std::find_if_not(view.begin(), view.end(), AsciiIsSpace);
+  view = view.substr(it - view.begin());
+}
+static inline void Trim(std::string_view& view)
+{
+  TrimRight(view);
+  TrimLeft(view);
+}
+
 // Removes leading and trailing whitespace from null-terminated string s.
 /* static */ void RobotsTxtParser::StripWhitespaceSlowly(char ** s) {
-  absl::string_view stripped = absl::StripAsciiWhitespace(*s);
-  *s = const_cast<char*>(stripped.data());
-  (*s)[stripped.size()] = '\0';
+  std::string_view str(*s);
+  TrimRight(str);
+  *s = const_cast<char*>(str.data());
+  (*s)[str.size()] = '\0';
 }
 
 bool RobotsTxtParser::GetKeyAndValueFrom(char ** key, char ** value,
@@ -401,7 +438,7 @@ void RobotsTxtParser::Parse() {
 
       {
         for (const unsigned char ch : robots_body_) {
-      ABSL_ASSERT(line_pos <= line_buffer_end);
+      assert(line_pos <= line_buffer_end);
       // Google-specific optimization: UTF-8 byte order marks should never
       // appear in a robots.txt file, but they do nevertheless. Skipping
       // possible BOM-prefix in the first bytes of the input.
@@ -446,12 +483,12 @@ class LongestMatchRobotsMatchStrategy : public RobotsMatchStrategy {
   LongestMatchRobotsMatchStrategy& operator=(
       const LongestMatchRobotsMatchStrategy&) = delete;
 
-  int MatchAllow(absl::string_view path, absl::string_view pattern) override;
-  int MatchDisallow(absl::string_view path, absl::string_view pattern) override;
+  int MatchAllow(std::string_view path, std::string_view pattern) override;
+  int MatchDisallow(std::string_view path, std::string_view pattern) override;
 };
 }  // end anonymous namespace
 
-void ParseRobotsTxt(absl::string_view robots_body,
+void ParseRobotsTxt(std::string_view robots_body,
                     RobotsParseHandler* parse_callback) {
   RobotsTxtParser parser(robots_body, parse_callback);
   parser.Parse();
@@ -480,11 +517,11 @@ void RobotsMatcher::InitUserAgentsAndPath(
   // The RobotsParser object doesn't own path_ or user_agents_, so overwriting
   // these pointers doesn't cause a memory leak.
   path_ = path;
-  ABSL_ASSERT('/' == *path_);
+  assert('/' == *path_);
   user_agents_ = user_agents;
 }
 
-bool RobotsMatcher::AllowedByRobots(absl::string_view robots_body,
+bool RobotsMatcher::AllowedByRobots(std::string_view robots_body,
                                     const std::vector<std::string>* user_agents,
                                     const std::string& url) {
   // The url is not normalized (escaped, percent encoded) here because the user
@@ -495,7 +532,7 @@ bool RobotsMatcher::AllowedByRobots(absl::string_view robots_body,
   return !disallow();
 }
 
-bool RobotsMatcher::OneAgentAllowedByRobots(absl::string_view robots_txt,
+bool RobotsMatcher::OneAgentAllowedByRobots(std::string_view robots_txt,
                                             const std::string& user_agent,
                                             const std::string& url) {
   std::vector<std::string> v;
@@ -549,23 +586,23 @@ void RobotsMatcher::HandleRobotsStart() {
   seen_separator_ = false;
 }
 
-/*static*/ absl::string_view RobotsMatcher::ExtractUserAgent(
-    absl::string_view user_agent) {
+/*static*/ std::string_view RobotsMatcher::ExtractUserAgent(
+    std::string_view user_agent) {
   // Allowed characters in user-agent are [a-zA-Z_-].
   const char* end = user_agent.data();
-  while (absl::ascii_isalpha(*end) || *end == '-' || *end == '_') {
+  while (AsciiIsAlpha(*end) || *end == '-' || *end == '_') {
     ++end;
   }
   return user_agent.substr(0, end - user_agent.data());
 }
 
 /*static*/ bool RobotsMatcher::IsValidUserAgentToObey(
-    absl::string_view user_agent) {
+    std::string_view user_agent) {
   return user_agent.length() > 0 && ExtractUserAgent(user_agent) == user_agent;
 }
 
 void RobotsMatcher::HandleUserAgent(int line_num,
-                                    absl::string_view user_agent) {
+                                    std::string_view user_agent) {
   if (seen_separator_) {
     seen_specific_agent_ = seen_global_agent_ = seen_separator_ = false;
   }
@@ -578,7 +615,7 @@ void RobotsMatcher::HandleUserAgent(int line_num,
   } else {
     user_agent = ExtractUserAgent(user_agent);
     for (const auto& agent : *user_agents_) {
-      if (absl::EqualsIgnoreCase(user_agent, agent)) {
+      if (boost::iequals(user_agent, agent)) {
         ever_seen_specific_agent_ = seen_specific_agent_ = true;
         break;
       }
@@ -586,7 +623,14 @@ void RobotsMatcher::HandleUserAgent(int line_num,
   }
 }
 
-void RobotsMatcher::HandleAllow(int line_num, absl::string_view value) {
+// Like std::string_view::substr, but do not throws if 'pos > s.size()'.
+static inline std::string_view clipped_substr(std::string_view s, size_t pos, 
+                                              size_t n = std::string_view::npos) {
+  pos = std::min(pos, static_cast<size_t>(s.size()));
+  return s.substr(pos, n);
+}
+
+void RobotsMatcher::HandleAllow(int line_num, std::string_view value) {
   if (!seen_any_agent()) return;
   seen_separator_ = true;
   const int priority = match_strategy_->MatchAllow(path_, value);
@@ -606,20 +650,20 @@ void RobotsMatcher::HandleAllow(int line_num, absl::string_view value) {
     // to '/'.
     const size_t slash_pos = value.find_last_of('/');
 
-    if (slash_pos != absl::string_view::npos &&
-        absl::StartsWith(absl::ClippedSubstr(value, slash_pos),
+    if (slash_pos != std::string_view::npos &&
+        boost::starts_with(clipped_substr(value, slash_pos),
                             "/index.htm")) {
       const int len = slash_pos + 1;
       absl::FixedArray<char> newpattern(len + 1);
       strncpy(newpattern.data(), value.data(), len);
       newpattern[len] = '$';
       HandleAllow(line_num,
-                  absl::string_view(newpattern.data(), newpattern.size()));
+                  std::string_view(newpattern.data(), newpattern.size()));
     }
   }
 }
 
-void RobotsMatcher::HandleDisallow(int line_num, absl::string_view value) {
+void RobotsMatcher::HandleDisallow(int line_num, std::string_view value) {
   if (!seen_any_agent()) return;
   seen_separator_ = true;
   const int priority = match_strategy_->MatchDisallow(path_, value);
@@ -637,27 +681,27 @@ void RobotsMatcher::HandleDisallow(int line_num, absl::string_view value) {
   }
 }
 
-int LongestMatchRobotsMatchStrategy::MatchAllow(absl::string_view path,
-                                                absl::string_view pattern) {
+int LongestMatchRobotsMatchStrategy::MatchAllow(std::string_view path,
+                                                std::string_view pattern) {
   return Matches(path, pattern) ? pattern.length() : -1;
 }
 
-int LongestMatchRobotsMatchStrategy::MatchDisallow(absl::string_view path,
-                                                   absl::string_view pattern) {
+int LongestMatchRobotsMatchStrategy::MatchDisallow(std::string_view path,
+                                                   std::string_view pattern) {
   return Matches(path, pattern) ? pattern.length() : -1;
 }
 
-void RobotsMatcher::HandleSitemap(int line_num, absl::string_view value) {
+void RobotsMatcher::HandleSitemap(int line_num, std::string_view value) {
   seen_separator_ = true;
 }
 
-void RobotsMatcher::HandleUnknownAction(int line_num, absl::string_view action,
-                                        absl::string_view value) {
+void RobotsMatcher::HandleUnknownAction(int line_num, std::string_view action,
+                                        std::string_view value) {
   seen_separator_ = true;
 }
 
-void ParsedRobotsKey::Parse(absl::string_view key) {
-  key_text_ = absl::string_view();
+void ParsedRobotsKey::Parse(std::string_view key) {
+  key_text_ = std::string_view();
   if (KeyIsUserAgent(key)) {
     type_ = USER_AGENT;
   } else if (KeyIsAllow(key)) {
@@ -672,35 +716,35 @@ void ParsedRobotsKey::Parse(absl::string_view key) {
   }
 }
 
-absl::string_view ParsedRobotsKey::GetUnknownText() const {
-  ABSL_ASSERT(type_ == UNKNOWN && !key_text_.empty());
+std::string_view ParsedRobotsKey::GetUnknownText() const {
+  assert(type_ == UNKNOWN && !key_text_.empty());
   return key_text_;
 }
 
-bool ParsedRobotsKey::KeyIsUserAgent(absl::string_view key) {
+bool ParsedRobotsKey::KeyIsUserAgent(std::string_view key) {
   return (
-      absl::StartsWithIgnoreCase(key, "user-agent") ||
-      (kAllowFrequentTypos && (absl::StartsWithIgnoreCase(key, "useragent") ||
-                               absl::StartsWithIgnoreCase(key, "user agent"))));
+      boost::istarts_with(key, "user-agent") ||
+      (kAllowFrequentTypos && (boost::istarts_with(key, "useragent") ||
+                               boost::istarts_with(key, "user agent"))));
 }
 
-bool ParsedRobotsKey::KeyIsAllow(absl::string_view key) {
-  return absl::StartsWithIgnoreCase(key, "allow");
+bool ParsedRobotsKey::KeyIsAllow(std::string_view key) {
+  return boost::istarts_with(key, "allow");
 }
 
-bool ParsedRobotsKey::KeyIsDisallow(absl::string_view key) {
+bool ParsedRobotsKey::KeyIsDisallow(std::string_view key) {
   return (
-      absl::StartsWithIgnoreCase(key, "disallow") ||
-      (kAllowFrequentTypos && ((absl::StartsWithIgnoreCase(key, "dissallow")) ||
-                               (absl::StartsWithIgnoreCase(key, "dissalow")) ||
-                               (absl::StartsWithIgnoreCase(key, "disalow")) ||
-                               (absl::StartsWithIgnoreCase(key, "diasllow")) ||
-                               (absl::StartsWithIgnoreCase(key, "disallaw")))));
+      boost::istarts_with(key, "disallow") ||
+      (kAllowFrequentTypos && ((boost::istarts_with(key, "dissallow")) ||
+                               (boost::istarts_with(key, "dissalow")) ||
+                               (boost::istarts_with(key, "disalow")) ||
+                               (boost::istarts_with(key, "diasllow")) ||
+                               (boost::istarts_with(key, "disallaw")))));
 }
 
-bool ParsedRobotsKey::KeyIsSitemap(absl::string_view key) {
-  return ((absl::StartsWithIgnoreCase(key, "sitemap")) ||
-          (absl::StartsWithIgnoreCase(key, "site-map")));
+bool ParsedRobotsKey::KeyIsSitemap(std::string_view key) {
+  return ((boost::istarts_with(key, "sitemap")) ||
+          (boost::istarts_with(key, "site-map")));
 }
 
 }  // namespace googlebot
